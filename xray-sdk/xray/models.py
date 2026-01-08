@@ -197,7 +197,8 @@ class StepModel(BaseModel):
         self,
         candidates_in: int,
         candidates_out: int,
-        data: Optional[List[Dict[str, Any]]] = None
+        data: Optional[List[Dict[str, Any]]] = None,
+        auto_sample: bool = True,
     ) -> None:
         """
         Helper method to set candidate tracking data.
@@ -206,10 +207,37 @@ class StepModel(BaseModel):
             candidates_in: Number of candidates before step
             candidates_out: Number of candidates after step
             data: Optional list of candidate objects (will be sampled if too large)
+            auto_sample: If True, automatically apply sampling to large datasets
+
+        Example:
+            # Without data
+            step.set_candidates(5000, 50)
+
+            # With full data (will be sampled automatically)
+            step.set_candidates(5000, 50, data=all_candidates)
+
+            # With data, no sampling (testing only)
+            step.set_candidates(5000, 50, data=all_candidates, auto_sample=False)
         """
         self.candidates_in = candidates_in
         self.candidates_out = candidates_out
-        self.candidates_data = data
+
+        # Apply sampling if data provided and auto_sample is True
+        if data and auto_sample:
+            from .sampling import auto_sample_candidates, should_sample
+
+            if should_sample(data):
+                # Store sampled data + metadata about sampling
+                self.candidates_data = auto_sample_candidates(data)
+                self.metadata["sampling_applied"] = True
+                self.metadata["original_data_count"] = len(data)
+                self.metadata["sampled_data_count"] = len(self.candidates_data)
+            else:
+                # Data is small enough, store as-is
+                self.candidates_data = data
+        else:
+            # No sampling requested or no data provided
+            self.candidates_data = data
 
 
 # =============================================================================
