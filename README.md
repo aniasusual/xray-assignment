@@ -23,7 +23,7 @@ X-Ray is a debugging system designed for modern AI-powered pipelines where tradi
 #### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/aniasusual/xray-assignment.git
 cd xray-assignment
 ```
 
