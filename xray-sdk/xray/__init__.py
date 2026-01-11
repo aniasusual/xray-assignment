@@ -55,6 +55,17 @@ from .client import (
     send_trace,
 )
 
+# Sampling (advanced usage)
+from .sampling import (
+    sample_candidates,
+    sample_candidates_head_tail,
+    sample_candidates_random,
+    sample_candidates_stratified,
+    auto_sample_candidates,
+    should_sample,
+    get_sampling_summary,
+)
+
 # =============================================================================
 # VERSION
 # =============================================================================
@@ -87,6 +98,14 @@ __all__ = [
     # HTTP Client (advanced usage)
     "XRayClient",
     "send_trace",
+    # Sampling (advanced usage)
+    "sample_candidates",
+    "sample_candidates_head_tail",
+    "sample_candidates_random",
+    "sample_candidates_stratified",
+    "auto_sample_candidates",
+    "should_sample",
+    "get_sampling_summary",
     # Version
     "__version__",
 ]

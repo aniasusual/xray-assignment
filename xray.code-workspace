@@ -1,0 +1,22 @@
+{
+  "folders": [
+    {
+      "name": "X-Ray SDK",
+      "path": "xray-sdk"
+    },
+    {
+      "name": "X-Ray API",
+      "path": "xray-api"
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "[python]": {
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+      }
+    }
+  }
+}
