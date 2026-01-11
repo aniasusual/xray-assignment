@@ -143,7 +143,9 @@ python -c "from xray import RunContext, StepContext, configure; print('SDK impor
 ### 1. Start the API
 
 ```bash
-./start_api.sh
+cd xray-api
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uvicorn app.main:app --reload --port 8001
 ```
 
 This starts the FastAPI backend on http://127.0.0.1:8001
@@ -185,7 +187,6 @@ xray-assignment/
 ├── ARCHITECTURE.md              # Complete architecture document ⭐
 ├── QUICKSTART.md               # Setup and testing guide
 ├── README.md                   # This file
-├── start_api.sh               # Start the API server
 │
 ├── xray-sdk/                   # SDK Package
 │   ├── .venv/                 # Virtual environment
@@ -497,8 +498,8 @@ Built as a full-stack engineering assignment demonstrating:
 
 **Ready to see it in action?**
 
-1. `./start_api.sh` - Start the backend
-2. `cd examples && python3 competitor_selection_demo.py` - Run the demo
-3. `python3 debug_competitor_selection.py` - Investigate the bug
+1. Start the API: `cd xray-api && source .venv/bin/activate && uvicorn app.main:app --reload --port 8001`
+2. Run the demo: `cd examples && python3 competitor_selection_demo.py`
+3. Debug the issue: `python3 debug_competitor_selection.py`
 
 **Time**: 5 minutes to see the complete flow 🚀
