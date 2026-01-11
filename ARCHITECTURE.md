@@ -4,7 +4,7 @@
 
 ## System Overview
 
-![System Architecture](./diagrams/system-architecture.png)
+![System Architecture](./docs/diagrams/system-architecture.png)
 
 X-Ray consists of two components:
 1. **SDK** (Python library): Context managers that instrument code with automatic timing, sampling, and async sending
@@ -14,7 +14,7 @@ X-Ray consists of two components:
 
 ### Pipeline Execution Flow
 
-![Pipeline Execution Flow](./diagrams/pipeline-execution-flow.png)
+![Pipeline Execution Flow](./docs/diagrams/pipeline-execution-flow.png)
 
 ---
 
@@ -22,7 +22,7 @@ X-Ray consists of two components:
 
 ### Core Structure
 
-![Data Model](./diagrams/data-model.png)
+![Data Model](./docs/diagrams/data-model.png)
 
 ```python
 Run {
@@ -124,7 +124,7 @@ Step {
 
 **Problem**: Competitor selection returned "Adjustable Aluminum Laptop Stand" for "iPhone 15 Pro Silicone Case"
 
-![Debugging Flow](./diagrams/debugging-flow.png)
+![Debugging Flow](./docs/diagrams/debugging-flow.png)
 
 #### Investigation
 
@@ -250,7 +250,7 @@ Enforced: `verb_noun` pattern
 
 ### Supporting Million Use Cases
 
-![Cross-Pipeline Query](./diagrams/cross-pipeline-query.png)
+![Cross-Pipeline Query](./docs/diagrams/cross-pipeline-query.png)
 
 Example - Fraud Detection (completely different domain):
 ```python
@@ -272,7 +272,7 @@ Works immediately - no X-Ray code changes needed.
 
 ### Solution: Smart Sampling
 
-![Sampling Strategy](./diagrams/sampling-strategy.png)
+![Sampling Strategy](./docs/diagrams/sampling-strategy.png)
 
 ```python
 def smart_sample(candidates, max_full=100, sample_size=50):
@@ -351,7 +351,7 @@ def select_competitor(product_title):
 
 ### (a) Minimal Instrumentation
 
-![Instrumentation Levels](./diagrams/instrumentation-levels.png)
+![Instrumentation Levels](./docs/diagrams/instrumentation-levels.png)
 
 Add 3 lines:
 ```python
@@ -395,7 +395,7 @@ def select_competitor(product_title):
 
 ### (c) If X-Ray API is Down?
 
-![Fallback Modes](./diagrams/fallback-modes.png)
+![Fallback Modes](./docs/diagrams/fallback-modes.png)
 
 **Fallback modes**:
 
