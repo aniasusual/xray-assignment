@@ -12,6 +12,13 @@ Complete documentation for the X-Ray debugging system.
   - Your first instrumented pipeline
   - Quick tips
 
+- **[Integration Guide](./integration-guide.md)** - Using X-Ray in production ⭐
+  - How X-Ray actually works
+  - Real-world FastAPI integration example
+  - Where output is visible (API, not terminal!)
+  - Debugging workflows (curl, scripts, dashboards)
+  - Common usage patterns
+
 ### Reference
 
 - **[SDK Reference](./sdk-reference.md)** - Complete Python SDK API
