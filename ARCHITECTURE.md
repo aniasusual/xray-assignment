@@ -29,9 +29,9 @@ Step: id, run_id, step_name, step_type, sequence,
 ### Key Decisions
 
 **1. Two Tables (Run + Step), Not Embedded**
-- **Why**: Query "all FILTER steps with >90% reduction" becomes indexed SQL, not full document scan
-- **Alternative**: MongoDB embedded steps → requires scanning every run to find step-level patterns
-- **Breaks Without**: Cross-pipeline analytics impossible; can't efficiently find all slow LLM steps
+- **Why**: Query "all FILTER steps with >90% reduction" becomes simple JOIN with indexes
+- **Alternative**: MongoDB embedded steps → requires $unwind in aggregation pipelines, less efficient than relational JOIN
+- **Breaks Without**: Cross-pipeline analytics require complex aggregations; harder to maintain indexes on nested arrays
 
 **2. JSONB for Variable Data**
 - **Why**: Each pipeline has different fields; JSONB supports indexing (`@>`, `->`, `?`)
