@@ -13,6 +13,14 @@ dependencies = [
     "python-dateutil (>=2.9.0.post0,<3.0.0)"
 ]
 
+[tool.poetry]
+name = "xray-sdk"
+version = "0.1.0"
+description = "X-Ray SDK for debugging multi-step pipelines"
+authors = ["Animesh Dhillon <d.animesh.pr@gmail.com>"]
+readme = "README.md"
+packages = [{include = "xray"}]
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

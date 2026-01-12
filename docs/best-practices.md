@@ -41,16 +41,24 @@ Use `verb_noun` pattern:
 
 **❌ Bad**:
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     filtered = filter_products(candidates)
-    step.set_candidates(filtered)
+    step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(filtered),
+                data=filtered
+            )
 ```
 
 **✅ Good**:
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     filtered = filter_products(candidates, min_price=10, max_price=100)
-    step.set_candidates(filtered, previous_count=len(candidates))
+    step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
     step.set_reasoning(
         "Filtered products by price range $10-$100. "
         "Removed out-of-stock items. Applied category match."
@@ -63,12 +71,20 @@ with StepContext("filter", StepType.FILTER) as step:
 
 **❌ Bad**:
 ```python
-step.set_candidates(filtered)  # Lost information!
+step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(filtered),
+                data=filtered
+            )  # Lost information!
 ```
 
 **✅ Good**:
 ```python
-step.set_candidates(filtered, previous_count=len(original))
+step.set_candidates(
+                candidates_in=len(original),
+                candidates_out=len(filtered),
+                data=filtered
+            )
 # Now you can see: 5000 → 500 (90% reduction)
 ```
 
@@ -78,13 +94,13 @@ step.set_candidates(filtered, previous_count=len(original))
 
 **❌ Bad**:
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     filtered = filter_by_price(candidates, 10, 100)
 ```
 
 **✅ Good**:
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     step.set_inputs({
         "min_price": 10,
         "max_price": 100,
@@ -193,7 +209,7 @@ xray_enabled = os.getenv("XRAY_ENABLED") == "true"
 
 def critical_function():
     if xray_enabled:
-        with StepContext("critical", StepType.CUSTOM) as step:
+        with run.step("critical", StepType.CUSTOM) as step:
             result = do_work()
     else:
         result = do_work()
@@ -238,7 +254,7 @@ with RunContext(
 When filtering out candidates, capture aggregate stats:
 
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     rejected_reasons = {
         "too_expensive": 0,
         "out_of_stock": 0,
@@ -257,13 +273,17 @@ with StepContext("filter", StepType.FILTER) as step:
             filtered.append(candidate)
 
     step.set_outputs({"rejection_reasons": rejected_reasons})
-    step.set_candidates(filtered, previous_count=len(candidates))
+    step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
 ```
 
 ### Capture LLM Costs
 
 ```python
-with StepContext("llm_call", StepType.LLM) as step:
+with run.step("llm_call", StepType.LLM) as step:
     step.set_inputs({"model": "gpt-4", "temperature": 0.7})
 
     response = llm.complete(prompt)
@@ -355,7 +375,7 @@ def test_pipeline():
 ```python
 def test_instrumentation():
     with RunContext("test-pipeline") as run:
-        with StepContext("test-step", StepType.FILTER) as step:
+        with run.step("test-step", StepType.FILTER) as step:
             step.set_candidates([1, 2, 3])
             step.set_reasoning("Test reasoning")
 
@@ -371,7 +391,7 @@ def test_instrumentation():
 
 **❌ Bad**:
 ```python
-with StepContext("authenticate", StepType.CUSTOM) as step:
+with run.step("authenticate", StepType.CUSTOM) as step:
     step.set_inputs({
         "username": username,
         "password": password  # NEVER!
@@ -380,7 +400,7 @@ with StepContext("authenticate", StepType.CUSTOM) as step:
 
 **✅ Good**:
 ```python
-with StepContext("authenticate", StepType.CUSTOM) as step:
+with run.step("authenticate", StepType.CUSTOM) as step:
     step.set_inputs({
         "username": username,
         "auth_method": "password"  # No sensitive data
@@ -466,15 +486,23 @@ curl "http://localhost:8001/api/runs?status=FAILURE&limit=10"
 
 ```python
 with RunContext("pipeline") as run:
-    with StepContext("search", StepType.SEARCH) as step:
+    with run.step("search", StepType.SEARCH) as step:
         results = search(query)
-        step.set_candidates(results)
+        step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(results),
+                data=results
+            )
 
     # Only filter if we have results
     if len(results) > 0:
-        with StepContext("filter", StepType.FILTER) as step:
+        with run.step("filter", StepType.FILTER) as step:
             filtered = filter_results(results)
-            step.set_candidates(filtered, previous_count=len(results))
+            step.set_candidates(
+                candidates_in=len(results),
+                candidates_out=len(filtered),
+                data=filtered
+            )
 ```
 
 ### Error Handling
@@ -482,7 +510,7 @@ with RunContext("pipeline") as run:
 ```python
 with RunContext("pipeline") as run:
     try:
-        with StepContext("risky_step", StepType.CUSTOM) as step:
+        with run.step("risky_step", StepType.CUSTOM) as step:
             result = may_fail()
             step.set_outputs({"result": result})
     except Exception as e:
@@ -501,13 +529,13 @@ def child_pipeline(data):
 
 def parent_pipeline(inputs):
     with RunContext("parent-pipeline") as run:
-        with StepContext("preprocess", StepType.TRANSFORM) as step:
+        with run.step("preprocess", StepType.TRANSFORM) as step:
             processed = preprocess(inputs)
 
         # Child pipeline creates its own trace
         results = child_pipeline(processed)
 
-        with StepContext("aggregate", StepType.TRANSFORM) as step:
+        with run.step("aggregate", StepType.TRANSFORM) as step:
             final = aggregate(results)
 
         run.set_final_output({"result": final})
@@ -579,7 +607,7 @@ with StepContext("validate_config", StepType.CUSTOM):
 
 **✅ Good**:
 ```python
-with StepContext("initialize", StepType.CUSTOM) as step:
+with run.step("initialize", StepType.CUSTOM) as step:
     config = read_config()
     validate(config)
     step.set_reasoning("Read and validated configuration")

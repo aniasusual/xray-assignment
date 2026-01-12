@@ -2,6 +2,8 @@
 
 Complete reference for the X-Ray REST API.
 
+> **Quick Testing**: See [../API_TESTING.md](../API_TESTING.md) for ready-to-use curl commands and a complete testing script.
+
 ## Base URL
 
 ```

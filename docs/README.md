@@ -87,7 +87,7 @@ Not just "what happened" (traditional logging) but **why** it happened.
 ## Quick Example
 
 ```python
-from xray import RunContext, StepContext, StepType, configure
+from xray import RunContext, StepType, configure
 
 configure(api_url="http://localhost:8001")
 
@@ -95,21 +95,29 @@ def find_competitor(product_title):
     with RunContext("competitor-selection") as run:
 
         # Step 1: Generate keywords
-        with StepContext("generate_keywords", StepType.LLM) as step:
+        with run.step("generate_keywords", StepType.LLM) as step:
             keywords = llm_extract_keywords(product_title)
             step.set_outputs({"keywords": keywords})
             step.set_reasoning("Used GPT-4 to extract search keywords")
 
         # Step 2: Search catalog
-        with StepContext("search", StepType.SEARCH) as step:
+        with run.step("search", StepType.SEARCH) as step:
             results = search_catalog(keywords)
-            step.set_candidates(results)  # Auto-sampled if >100
+            step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(results),
+                data=results
+            )  # Auto-sampled if >100
             step.set_reasoning("Searched product catalog")
 
         # Step 3: Filter by category
-        with StepContext("filter", StepType.FILTER) as step:
+        with run.step("filter", StepType.FILTER) as step:
             filtered = filter_by_category(results)
-            step.set_candidates(filtered, previous_count=len(results))
+            step.set_candidates(
+                candidates_in=len(results),
+                candidates_out=len(filtered),
+                data=filtered
+            )
             step.set_reasoning("Filtered by category similarity")
 
         best = filtered[0]
@@ -208,7 +216,7 @@ This is a take-home assignment, but the architecture is production-ready!
 ### SDK
 
 ```python
-from xray import configure, RunContext, StepContext, StepType
+from xray import configure, RunContext, StepType
 
 # Configure
 configure(api_url="http://localhost:8001", enabled=True)
@@ -216,7 +224,7 @@ configure(api_url="http://localhost:8001", enabled=True)
 # Run
 with RunContext("pipeline-name") as run:
     # Step
-    with StepContext("step-name", StepType.FILTER) as step:
+    with run.step("step-name", StepType.FILTER) as step:
         step.set_inputs({...})
         step.set_candidates([...])
         step.set_reasoning("Why...")

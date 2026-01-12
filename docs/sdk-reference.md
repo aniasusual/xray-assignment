@@ -137,7 +137,7 @@ Context manager for a single step in a pipeline.
 ### `StepContext(step_name, step_type, sequence=None, metadata=None)`
 
 ```python
-from xray import StepContext, StepType
+from xray import StepType
 
 with StepContext(
     step_name="filter_by_price",
@@ -179,7 +179,7 @@ StepType.CUSTOM       # Custom operations
 Set input parameters for this step.
 
 ```python
-with StepContext("search", StepType.SEARCH) as step:
+with run.step("search", StepType.SEARCH) as step:
     step.set_inputs({
         "query": "wireless headphones",
         "limit": 1000,
@@ -193,7 +193,7 @@ with StepContext("search", StepType.SEARCH) as step:
 Set output results for this step.
 
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     filtered = filter_results(candidates)
     step.set_outputs({
         "filtered_count": len(filtered),
@@ -209,7 +209,7 @@ with StepContext("filter", StepType.FILTER) as step:
 Explain WHY this step did what it did.
 
 ```python
-with StepContext("rank", StepType.RANK) as step:
+with run.step("rank", StepType.RANK) as step:
     ranked = rank_by_score(candidates)
     step.set_reasoning(
         "Ranked by relevance score combining title similarity (40%), "
@@ -222,7 +222,7 @@ with StepContext("rank", StepType.RANK) as step:
 Set the candidates (items being processed).
 
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     filtered = filter_by_price(all_products, min_price=10, max_price=100)
 
     # Track candidates in/out
@@ -258,13 +258,13 @@ step.set_candidates(
 )
 ```
 
-#### `step.set_filters_applied(filters: dict)`
+#### `step.set_filters(filters: dict)`
 
 Set which filters were applied in this step.
 
 ```python
-with StepContext("filter", StepType.FILTER) as step:
-    step.set_filters_applied({
+with run.step("filter", StepType.FILTER) as step:
+    step.set_filters({
         "min_price": 10.0,
         "max_price": 100.0,
         "category": "Electronics",
@@ -277,7 +277,7 @@ with StepContext("filter", StepType.FILTER) as step:
 Set custom metadata for this step.
 
 ```python
-with StepContext("llm_call", StepType.LLM) as step:
+with run.step("llm_call", StepType.LLM) as step:
     step.set_metadata({
         "model": "gpt-4",
         "temperature": 0.7,
@@ -490,14 +490,22 @@ step.set_candidates(data, auto_sample=False)
 
 ```python
 # ❌ Bad
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     filtered = filter_products(candidates)
-    step.set_candidates(filtered)
+    step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(filtered),
+                data=filtered
+            )
 
 # ✅ Good
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     filtered = filter_products(candidates, min_price=10)
-    step.set_candidates(filtered, previous_count=len(candidates))
+    step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
     step.set_reasoning("Filtered by price >= $10")
 ```
 
@@ -517,10 +525,18 @@ with StepContext("filter_by_price", StepType.FILTER):
 
 ```python
 # ❌ Bad
-step.set_candidates(filtered)
+step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(filtered),
+                data=filtered
+            )
 
 # ✅ Good
-step.set_candidates(filtered, previous_count=len(original))
+step.set_candidates(
+                candidates_in=len(original),
+                candidates_out=len(filtered),
+                data=filtered
+            )
 ```
 
 ### 4. Add Context in Metadata

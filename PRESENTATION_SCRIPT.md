@@ -1,314 +1,359 @@
-# X-Ray Project - 7 Minute Explanation Script
+# X-Ray Project - 10 Minute Video Script
 
-**Total time: ~7-8 minutes**
-
----
-
-## 1. THE PROBLEM (1 minute)
-
-"Let me explain the problem X-Ray solves.
-
-Imagine you have an e-commerce website. A customer searches for an iPhone case, but your system recommends a laptop stand. That's wrong!
-
-Traditional logging tells you WHAT happened - the function ran, it took 120 milliseconds. But it doesn't tell you WHY the wrong product was selected.
-
-You have to:
-- Add print statements
-- Redeploy code
-- Wait for the bug to happen again
-- Look at logs
-- Still don't understand why
-
-This takes hours or days to debug.
-
-X-Ray solves this. It captures WHY decisions were made, so you can debug in minutes instead of hours."
+**Total time: 9-10 minutes max**
 
 ---
 
-## 2. THE SOLUTION (1 minute)
+## VIDEO SETUP (Before Recording)
+
+- **Camera on**: Ensure your face is visible throughout
+- **Screen share ready**: Have terminal, code editor, browser open
+- **Demo ready**: API running, demo script ready to execute
+- **Relaxed tone**: Talk like explaining to a colleague, not reading a doc
+
+---
+
+## 1. INTRODUCTION (30 seconds)
+
+"Hi, I'm [Your Name]. I built X-Ray, a debugging system for non-deterministic pipelines.
+
+The problem is simple: when an AI-powered pipeline returns the wrong result—like matching a phone case to a laptop stand—traditional logging tells you WHAT happened, but not WHY.
+
+X-Ray solves this by capturing decision context at each step: inputs, outputs, reasoning, and candidates.
+
+Let me walk you through the architecture, show it working, and share a challenge I faced while building it."
+
+---
+
+## 2. ARCHITECTURE OVERVIEW (2.5 minutes)
+
+### Two Components
 
 "X-Ray has two parts:
 
-**Part 1 - The SDK**: A Python library that developers add to their code. It's like a flight recorder - it captures everything that happens.
+**The SDK** (Python library):
+- Developers wrap their pipeline with context managers
+- Captures timing, inputs, outputs, reasoning automatically
+- Sends data to API asynchronously (<1ms overhead)
 
-**Part 2 - The API**: A separate service that stores all the data and lets you query it later.
+**The API** (FastAPI + PostgreSQL):
+- Stores traces in two tables: Runs and Steps
+- Provides query endpoints for debugging"
 
-Here's how it works:
-- Your application runs normally
-- X-Ray SDK captures data in the background (takes less than 1 millisecond)
-- Data is sent to X-Ray API
-- When a bug happens, you query the API to see exactly what went wrong
+### Data Model Design Decisions
 
-No terminal output, no print statements. You query when you need to debug."
+*[Show ARCHITECTURE.md diagram or draw on screen]*
 
----
+"Let me explain key design decisions:
 
-## 3. HOW USERS INTEGRATE IT (1.5 minutes)
+**Decision 1: Two tables, not embedded documents**
 
-"Let me show you how a developer uses X-Ray.
+Why? Because I need queries like 'show all FILTER steps with >90% reduction' across different pipelines. With PostgreSQL + indexes, this is O(log n). With MongoDB embedded, I'd scan every document.
 
-**Step 1 - Configure once at startup:**
+Alternative I considered: Embedded steps in MongoDB. Rejected because cross-pipeline analytics become impossible.
 
-```python
-from xray import configure
+**Decision 2: JSONB for variable data**
 
-configure(
-    api_url='http://xray-api.mycompany.com',
-    enabled=True,
-    async_mode=True
-)
-```
+Each pipeline has different fields. Competitor selection stores 'keywords', categorization stores 'confidence_scores'. JSONB lets me handle this without migrations.
 
-This tells X-Ray where to send data.
+Alternative: Strict schema with columns. But adding a new pipeline type would require database migration every time.
 
-**Step 2 - Wrap your pipeline:**
+**Decision 3: Standardized step types**
 
-```python
-with RunContext('competitor-selection') as run:
-    # Your existing code
-    product = get_product(product_id)
-    candidates = search_catalog(product)
-    filtered = filter_by_category(candidates)
-    result = rank_by_relevance(filtered)
-    return result
-```
+I enforce an enum: LLM, SEARCH, FILTER, RANK, SELECT. This enables cross-pipeline queries.
 
-**Step 3 - Wrap important steps:**
+Without it, developers would use 'filter', 'filtering', 'prune'—fragmenting the data and breaking analytics.
 
-```python
-with RunContext('competitor-selection') as run:
+**Decision 4: Smart sampling**
 
-    with StepContext('search', StepType.SEARCH) as step:
-        candidates = search_catalog(product)
-        step.set_candidates(candidates)
+The big challenge: a step with 5000 candidates = 5MB. 10 steps = 50MB/run. 1000 runs/day = 50GB/day.
 
-    with StepContext('filter', StepType.FILTER) as step:
-        filtered = filter_by_category(candidates, threshold=0.3)
-        step.set_candidates(filtered, previous_count=len(candidates))
-        step.set_reasoning('Filtered using threshold 0.3')
+My solution: Sample 150 candidates (head 50 + tail 50 + random 50). This gives 97% storage reduction while preserving debuggability for 95% of issues.
 
-    with StepContext('rank', StepType.RANK) as step:
-        result = rank_by_relevance(filtered)
-        step.set_candidates(result)
-
-    return result
-```
-
-That's it! Your application now sends traces to X-Ray automatically."
+Trade-off: You lose full visibility, but sampling captures patterns. Developers can override for critical data."
 
 ---
 
-## 4. HOW IT WORKS INTERNALLY (1.5 minutes)
+## 3. LIVE DEMO (2.5 minutes)
 
-"Now let me explain what happens inside.
+*[Switch to terminal/browser]*
 
-**When you use 'with RunContext':**
-- Python calls `__enter__()` method
-- X-Ray records the start time
-- X-Ray stores this in something called 'context variables' - think of it like a thread-safe global variable
+"Let me show you how this works in practice.
 
-**When you use 'with StepContext':**
-- Python calls `__enter__()` method
-- X-Ray looks up the parent RunContext from context variables
-- Records start time for this step
+**Step 1: Start the API**
 
-**When your code finishes:**
-- Python calls `__exit__()` method
-- X-Ray records end time
-- Calculates duration (end time minus start time)
-- For RunContext: sends all data to X-Ray API in background thread
-- Your application continues immediately - no waiting!
-
-**Key feature - Smart Sampling:**
-If you have 5000 candidates, X-Ray doesn't store all 5000. It samples:
-- First 50 items
-- Last 50 items
-- Random 50 from middle
-
-Total: 150 items instead of 5000. That's 97% less storage!
-
-Why this works: You can still see patterns and debug most issues."
-
----
-
-## 5. DEBUGGING WITH X-RAY (1.5 minutes)
-
-"Now the important part - how do you actually debug?
-
-**Scenario:** Customer reports laptop stand was returned for iPhone case search.
-
-**Step 1 - Query X-Ray API:**
+*[Show terminal with API running]*
 
 ```bash
-curl 'http://xray-api/api/runs?pipeline_name=competitor-selection'
+cd xray-api
+uvicorn app.main:app --port 8001
 ```
 
-This shows all recent runs of that pipeline.
+API is running on port 8001.
 
-**Step 2 - Get details:**
+**Step 2: Run the demo pipeline**
+
+*[Show code in editor briefly]*
+
+This is a competitor selection pipeline with a deliberate bug—the filter threshold is too low (0.3).
+
+*[Run demo]*
 
 ```bash
-curl 'http://xray-api/api/runs/{run_id}'
+cd xray-sdk/examples
+python3 competitor_selection_demo.py
 ```
 
-**Step 3 - Analyze the response:**
+*[Point to output]*
 
-```json
-{
-  "steps": [
-    {
-      "step_name": "filter",
-      "reasoning": "Filtered using threshold 0.3",
-      "candidates_in": 5000,
-      "candidates_out": 4200,
-      "duration_ms": 120
-    }
-  ]
-}
+It selected a laptop stand for an iPhone case—wrong match. But X-Ray captured the trace.
+
+**Step 3: Debug using X-Ray API**
+
+*[Show browser or curl commands]*
+
+First, list all runs:
+
+```bash
+curl http://127.0.0.1:8001/api/runs
 ```
 
-**What you see:**
-- Threshold was 0.3 (too low!)
-- Only filtered 16% of candidates (should filter 70-90%)
-- That's why laptop stand got through
+*[Show JSON response briefly]*
 
-**Root cause found in 2 minutes!**
+Found the run. Now get details:
 
-**The fix:**
-Change threshold from 0.3 to 0.7. Deploy. Done."
+```bash
+curl http://127.0.0.1:8001/api/runs/{run_id}
+```
 
----
+*[Scroll to filter step in JSON]*
 
-## 6. KEY TECHNICAL CONCEPTS (1 minute)
+Look at the filter step:
+- Candidates in: 5000
+- Candidates out: 4200
+- **Only 16% filtered!** Should be 90%.
+- Filter threshold: 0.3 ← **Too low**
 
-"Let me explain three important technical concepts:
+That's why the laptop stand got through.
 
-**1. Context Managers (the 'with' statement):**
-- Python feature that ensures cleanup happens
-- `__enter__()` runs when entering the block
-- `__exit__()` runs when exiting the block
-- X-Ray uses this to automatically capture start time and end time
+*[Show rank step]*
 
-**2. Context Variables:**
-- Thread-safe storage
-- Each thread has its own copy
-- StepContext uses this to find its parent RunContext
-- No need to pass RunContext around manually
+And here, the ranking step gave the laptop stand a score of 0.89 because of a price match boost.
 
-**3. Async Mode:**
-- Sends data in background thread
-- Your application doesn't wait
-- Overhead is less than 1 millisecond
-- If X-Ray API is down, your app still works"
+**Root cause found in 2 minutes.**
+
+The fix: Change threshold from 0.3 to 0.7. That's it."
 
 ---
 
-## 7. DATABASE & STORAGE (45 seconds)
+## 4. REFLECTION: A CHALLENGE I FACED (2 minutes)
 
-"X-Ray stores data in PostgreSQL.
+"Let me share a moment where I was stuck.
 
-**Two tables:**
+**The Challenge**: How to handle cross-pipeline queries.
 
-**Runs table:**
-- Stores one row per pipeline execution
-- Fields: pipeline name, start time, end time, status, metadata
+Initially, I thought: 'Just let developers store whatever data they want in JSONB—total flexibility.'
 
-**Steps table:**
-- Stores one row per step
-- Fields: step name, step type, duration, inputs, outputs, reasoning, candidates
+But then I realized: if everyone stores data differently, how do you query 'all FILTER steps with high reduction rates' across pipelines?
 
-**Why JSONB:**
-Different pipelines have different inputs and outputs. We can't create columns for every possibility. JSONB lets us store any structure flexibly.
+**My solution came in two parts**:
 
-**Storage:** With smart sampling, 1000 runs per day = about 250MB per day."
+**Part 1: Standardize step types**
 
----
+I created an enum: LLM, SEARCH, FILTER, RANK, SELECT. This gives structure while allowing variability within each type.
 
-## 8. REAL WORLD VALUE (30 seconds)
+**Part 2: Naming conventions**
 
-"Why is X-Ray valuable?
+I enforce `verb_noun` patterns like `filter_by_price`, `rank_by_relevance`. This makes it clear what each step does.
 
-**Traditional debugging:**
-- Add logs, redeploy, reproduce bug, analyze
-- Takes hours or days
-- Disrupts production
+**The trade-off**: I'm constraining developers. They can't just use any step name. But this constraint enables powerful cross-pipeline analytics.
 
-**With X-Ray:**
-- Data already captured
-- Query API, see exact trace
-- Find root cause in minutes
-- No code changes needed
+**Why this matters**: You can now ask questions like 'show me all filtering steps that eliminated >90% of candidates' across competitor-selection, fraud-detection, categorization—completely different domains.
 
-**Example results:**
-- Bug that would take 4 hours → Fixed in 10 minutes
-- 97% storage savings from smart sampling
-- Less than 1ms overhead on your application
-- Works even if X-Ray API goes down"
+This tension between flexibility and queryability was the hardest design decision. I chose queryability because debugging value depends on it."
 
 ---
 
-## 9. CLOSING (30 seconds)
+## 5. TECHNICAL DEPTH: DEVELOPER EXPERIENCE (1.5 minutes)
+
+"Let me quickly cover developer experience.
+
+**Minimal integration** (3 lines):
+```python
+with RunContext("my-pipeline") as run:
+    # existing code
+    run.set_final_output(result)
+```
+
+You get run timing and final output. No per-step visibility.
+
+**Full integration** (~5 lines per step):
+```python
+with run.step("filter", StepType.FILTER) as step:
+    step.set_inputs({"threshold": 0.7})
+    filtered = filter_func(candidates)
+    step.set_candidates(
+        candidates_in=len(candidates),
+        candidates_out=len(filtered),
+        data=filtered
+    )
+    step.set_reasoning("Filtered by threshold")
+```
+
+You get complete visibility: timing, inputs, outputs, reasoning, candidates.
+
+**Fallback modes**:
+- If X-Ray API is down, your pipeline keeps running
+- Production: Silent mode (no errors)
+- Development: Log to file, upload later
+
+This was important—X-Ray should never break production pipelines."
+
+---
+
+## 6. REAL-WORLD VALUE (1 minute)
+
+"Why does this matter?
+
+I worked on an e-commerce search system where 'wireless headphones' returned corded headphones in top 10.
+
+**Without X-Ray**: 3-4 days debugging. We had Elasticsearch logs, Datadog APM for timing, but couldn't see which of 6 stages failed.
+
+**With X-Ray**: We would've found in 10 minutes that the query parser extracted 'connectivity: wireless' but the filter step didn't apply it.
+
+This pattern repeats: competitor selection, listing optimization, fraud detection—any multi-step, non-deterministic pipeline.
+
+**Key insight**: Traditional tracing tells you WHAT functions ran. X-Ray tells you WHY decisions were made."
+
+---
+
+## 7. CLOSING (30 seconds)
 
 "To summarize:
 
-**X-Ray is a debugging system for AI pipelines.**
+**X-Ray = debugging system for AI pipelines**
 
-It captures:
-- What happened (timing, data flow)
-- WHY it happened (reasoning, parameters, decisions)
-
-Two components:
-- SDK: Lightweight library in your code
-- API: Separate service for storage and queries
+Architecture:
+- Two tables (Runs + Steps) for queryability
+- JSONB for flexibility, standardized types for analytics
+- Smart sampling (97% storage reduction)
 
 Result:
-- Debug in minutes instead of hours
-- No production disruptions
-- Complete visibility into decision-making
+- Debug in minutes vs hours/days
+- Works across different pipeline types
+- <1ms overhead, doesn't break production
 
-That's X-Ray. Questions?"
+That's X-Ray. Happy to answer questions!"
 
 ---
 
 ## TIMING BREAKDOWN
 
-1. Problem: 1 min
-2. Solution: 1 min
-3. Integration: 1.5 min
-4. Internal workings: 1.5 min
-5. Debugging flow: 1.5 min
-6. Technical concepts: 1 min
-7. Database: 45 sec
-8. Value: 30 sec
-9. Closing: 30 sec
+1. Introduction: 30 sec
+2. Architecture: 2.5 min
+3. Live Demo: 2.5 min
+4. Reflection (Challenge): 2 min
+5. Developer Experience: 1.5 min
+6. Real-World Value: 1 min
+7. Closing: 30 sec
 
-**Total: ~8 minutes**
+**Total: ~10 minutes**
 
 ---
 
-## TIPS FOR DELIVERY
+## DELIVERY TIPS
 
-- **Speak slowly and clearly**
+### Before Recording
+- [ ] API running on port 8001
+- [ ] Terminal ready with commands in history (use ↑ arrow)
+- [ ] Browser tab open to localhost:8001/docs
+- [ ] Code editor showing key files
+- [ ] Camera positioned, face visible
+- [ ] Good lighting, quiet room
+
+### During Recording
+- **Speak to the camera** like explaining to a colleague
+- **Don't read the document** - explain in your own words
+- **Show, don't tell** - point at code, JSON responses, terminal output
 - **Pause between sections** (2-3 seconds)
-- **Show code examples on screen** if possible
-- **Use hand gestures** when explaining "background thread" or "two components"
-- **Make eye contact**
-- **Emphasize key numbers**: "97% storage savings", "less than 1 millisecond"
-- **Be ready for questions** after each section
+- **Emphasize key numbers**: "97% storage reduction", "10 minutes vs 3 days"
+- **Use hand gestures** when explaining concepts
+- **Make eye contact** with camera
 
-## POSSIBLE QUESTIONS & ANSWERS
+### What to Show on Screen
+- **Architecture section**: ARCHITECTURE.md or draw diagram
+- **Demo section**: Terminal + browser + code editor
+- **Reflection section**: Your face (camera) + possibly code/architecture
+- **Closing**: Your face (camera)
+
+---
+
+## POSSIBLE QUESTIONS (If Interviewer Asks)
 
 **Q: What if X-Ray API is down?**
-A: Your app keeps working. We have fallback modes - either ignore silently, or save traces to a local file.
+A: Pipeline keeps running. Fallback modes: SILENT (production), LOG (development), RAISE (testing).
 
-**Q: What's the performance impact?**
-A: Less than 1 millisecond overhead with async mode. We measured it.
+**Q: Performance impact?**
+A: <1ms overhead with async mode. Background thread sends data, pipeline doesn't wait.
 
-**Q: How much does it cost to store data?**
-A: With smart sampling, about 250MB per day for 1000 pipeline runs. That's roughly $7-10 per month in cloud storage.
+**Q: How much storage?**
+A: With smart sampling, ~250MB/day for 1000 runs. About $7-10/month in cloud storage.
 
-**Q: Can it work with languages other than Python?**
-A: Currently Python only, but the API is language-agnostic. Could build SDKs for JavaScript, Go, Java, etc.
+**Q: Why not use existing tracing tools (Jaeger, Zipkin)?**
+A: They answer "what functions ran and how long?" X-Ray answers "why did the system make this decision?" Different problem.
 
-**Q: How is this different from traditional logging?**
-A: Logs tell you WHAT happened. X-Ray tells you WHY. It captures decision context, not just events.
+**Q: What's the hardest part to get right?**
+A: Balancing flexibility (any pipeline type) vs queryability (cross-pipeline analytics). My solution: standardized step types + JSONB for variable data.
+
+**Q: Would you change anything?**
+A: If rebuilding, I'd add a "diff viewer" to compare two runs side-by-side for A/B testing. Would've helped with the e-commerce search debugging.
+
+---
+
+## SCREEN FLOW
+
+```
+[Your face] → Introduction
+[Screen: Architecture doc/diagram] → Architecture explanation
+[Screen: Terminal + Browser] → Live demo
+[Your face] → Reflection on challenge
+[Screen: Code editor] → Developer experience
+[Your face] → Real-world value + Closing
+```
+
+---
+
+## DEMO COMMANDS (Copy-paste ready)
+
+```bash
+# Terminal 1: Start API
+cd xray-api
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8001
+
+# Terminal 2: Run demo
+cd xray-sdk/examples
+source ../.venv/bin/activate
+python3 competitor_selection_demo.py
+
+# Terminal 3: Query API
+curl http://127.0.0.1:8001/api/runs
+curl http://127.0.0.1:8001/api/runs/{run_id}
+
+# Or use browser
+open http://127.0.0.1:8001/docs
+```
+
+---
+
+## FINAL CHECKLIST
+
+Before submitting video:
+- [ ] Total time ≤ 10 minutes
+- [ ] Face visible throughout
+- [ ] Architecture explained (not read)
+- [ ] Live demo shown
+- [ ] Challenge/reflection included
+- [ ] Clear audio, no background noise
+- [ ] Video uploaded (YouTube unlisted)
+- [ ] Link added to submission form

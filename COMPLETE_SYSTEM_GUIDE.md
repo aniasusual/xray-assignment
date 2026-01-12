@@ -93,7 +93,7 @@ async def find_competitors(product_id: str):
 ```python
 # app/main.py (AFTER X-Ray)
 from fastapi import FastAPI
-from xray import RunContext, StepContext, StepType, configure
+from xray import RunContext, StepType, configure
 
 # Configure once at startup
 configure(
@@ -111,22 +111,30 @@ async def find_competitors(product_id: str):
     with RunContext("competitor-selection", metadata={"product_id": product_id}) as run:
 
         # Wrap each step
-        with StepContext("generate_keywords", StepType.LLM) as step:
+        with run.step("generate_keywords", StepType.LLM) as step:
             keywords = llm.generate_keywords(product)
             step.set_outputs({"keywords": keywords})
             step.set_reasoning("Used GPT-4 to extract keywords")
 
-        with StepContext("search_catalog", StepType.SEARCH) as step:
+        with run.step("search_catalog", StepType.SEARCH) as step:
             candidates = search_catalog(keywords)
-            step.set_candidates(candidates)  # Auto-sampled if > 100
+            step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(candidates),
+                data=candidates
+            )  # Auto-sampled if > 100
 
-        with StepContext("filter_by_category", StepType.FILTER) as step:
+        with run.step("filter_by_category", StepType.FILTER) as step:
             threshold = 0.3
             step.set_inputs({"threshold": threshold})
             filtered = filter_by_category(candidates, threshold)
-            step.set_candidates(filtered, previous_count=len(candidates))
+            step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
 
-        with StepContext("rank_by_relevance", StepType.RANK) as step:
+        with run.step("rank_by_relevance", StepType.RANK) as step:
             ranked = rank_by_relevance(filtered)
             step.set_candidates(ranked[:10])
 
@@ -609,7 +617,7 @@ class StepContext:
         else:
             self.step_model.candidates_data = candidates
 
-    def set_filters_applied(self, filters: Dict[str, Any]):
+    def set_filters(self, filters: Dict[str, Any]):
         self.step_model.filters_applied = filters
 
     def set_metadata(self, metadata: Dict[str, Any]):
@@ -2315,7 +2323,7 @@ env:
 ```python
 # User's application
 with RunContext("my-pipeline") as run:
-    with StepContext("step1", StepType.CUSTOM) as step:
+    with run.step("step1", StepType.CUSTOM) as step:
         result = do_work()
         step.set_outputs({"result": result})
     # ... more steps
@@ -2573,13 +2581,21 @@ Background thread:          150ms   (HTTP POST, doesn't block)
 
 Without:
 ```python
-step.set_candidates(5000_items)
+step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(5000_items),
+                data=5000_items
+            )
 # Serializes 5000 items to JSON: ~5MB, 50ms
 ```
 
 With:
 ```python
-step.set_candidates(5000_items)  # auto_sample=True
+step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(5000_items),
+                data=5000_items
+            )  # auto_sample=True
 # Samples to 150 items: ~150KB, 5ms
 # 10x faster serialization
 ```
@@ -3213,7 +3229,7 @@ Total: 0.5ms overhead
 **Step 1: User's code**
 ```python
 with RunContext("pipeline") as run:
-    with StepContext("step1", StepType.LLM) as step:
+    with run.step("step1", StepType.LLM) as step:
         result = llm.call()
         step.set_outputs({"result": result})
 ```

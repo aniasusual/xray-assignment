@@ -63,7 +63,7 @@ async def find_competitors(product_id: str):
 ```python
 # your_app/main.py (AFTER X-Ray integration)
 from fastapi import FastAPI
-from xray import RunContext, StepContext, StepType, configure
+from xray import RunContext, StepType, configure
 
 # Configure X-Ray once at startup
 configure(
@@ -84,35 +84,47 @@ async def find_competitors(product_id: str):
     ) as run:
 
         # Step 1: Get product
-        with StepContext("get_product", StepType.CUSTOM) as step:
+        with run.step("get_product", StepType.CUSTOM) as step:
             product = get_product(product_id)
             step.set_outputs({"title": product.title, "category": product.category})
 
         # Step 2: Generate keywords (LLM)
-        with StepContext("generate_keywords", StepType.LLM) as step:
+        with run.step("generate_keywords", StepType.LLM) as step:
             step.set_inputs({"product_title": product.title})
             keywords = generate_keywords(product)
             step.set_outputs({"keywords": keywords})
             step.set_reasoning(f"Used GPT-4 to extract {len(keywords)} keywords")
 
         # Step 3: Search
-        with StepContext("search_catalog", StepType.SEARCH) as step:
+        with run.step("search_catalog", StepType.SEARCH) as step:
             candidates = search_catalog(keywords)
-            step.set_candidates(candidates)  # Auto-sampled if >100
+            step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(candidates),
+                data=candidates
+            )  # Auto-sampled if >100
             step.set_reasoning("Searched via Elasticsearch")
 
         # Step 4: Filter
-        with StepContext("filter_by_category", StepType.FILTER) as step:
+        with run.step("filter_by_category", StepType.FILTER) as step:
             threshold = 0.7
             step.set_inputs({"threshold": threshold})
             filtered = filter_by_category(candidates, threshold)
-            step.set_candidates(filtered, previous_count=len(candidates))
+            step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
             step.set_reasoning(f"Filtered by category similarity >= {threshold}")
 
         # Step 5: Rank
-        with StepContext("rank_by_relevance", StepType.RANK) as step:
+        with run.step("rank_by_relevance", StepType.RANK) as step:
             ranked = rank_by_relevance(filtered)
-            step.set_candidates(ranked[:10])  # Top 10
+            step.set_candidates(
+                candidates_in=len(filtered),
+                candidates_out=len(ranked),
+                data=ranked[:10]
+            )  # Top 10
             step.set_reasoning("Ranked by relevance score")
 
         result = ranked[0]

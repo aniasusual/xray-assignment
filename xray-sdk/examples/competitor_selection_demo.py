@@ -13,16 +13,12 @@ This demo includes a deliberate bug (low category similarity threshold)
 that causes incorrect matches - demonstrating how X-Ray helps debug.
 """
 
-import sys
 import random
 import time
 from typing import List, Dict, Any
 from datetime import datetime
 
-# Add SDK to path
-sys.path.insert(0, '../xray-sdk')
-
-from xray import RunContext, StepContext, StepType, configure
+from xray import RunContext, StepType, configure
 
 # Configure X-Ray
 configure(
@@ -223,7 +219,7 @@ def select_competitor_for_product(product_title: str, category: str) -> Dict[str
     ) as run:
 
         # Step 1: Generate Keywords (LLM)
-        with StepContext("generate_keywords", StepType.LLM) as step:
+        with run.step("generate_keywords", StepType.LLM) as step:
             step.set_inputs({
                 "product_title": product_title,
                 "category": category,
@@ -239,7 +235,7 @@ def select_competitor_for_product(product_title: str, category: str) -> Dict[str
             step.set_reasoning("Used GPT-4 to extract relevant search keywords from product title and category")
 
         # Step 2: Search Catalog
-        with StepContext("search_catalog", StepType.SEARCH) as step:
+        with run.step("search_catalog", StepType.SEARCH) as step:
             step.set_inputs({
                 "keywords": keywords,
                 "limit": 1000
@@ -247,14 +243,18 @@ def select_competitor_for_product(product_title: str, category: str) -> Dict[str
 
             candidates = search_catalog(keywords, limit=1000)
 
-            step.set_candidates(candidates)  # Auto-sampled if >100
+            step.set_candidates(
+                candidates_in=0,  # Search step has no input candidates
+                candidates_out=len(candidates),
+                data=candidates
+            )
             step.set_outputs({
                 "found": len(candidates)
             })
             step.set_reasoning("Searched product catalog using generated keywords via Elasticsearch")
 
         # Step 3: Filter by Category (BUGGY STEP!)
-        with StepContext("filter_by_category", StepType.FILTER) as step:
+        with run.step("filter_by_category", StepType.FILTER) as step:
             threshold = 0.3  # BUG: Too low!
 
             step.set_inputs({
@@ -265,8 +265,12 @@ def select_competitor_for_product(product_title: str, category: str) -> Dict[str
 
             filtered = filter_by_category_similarity(candidates, category, threshold)
 
-            step.set_candidates(filtered, previous_count=len(candidates))
-            step.set_filters_applied({
+            step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
+            step.set_filters({
                 "category_similarity_threshold": threshold,
                 "target_category": category
             })
@@ -277,7 +281,7 @@ def select_competitor_for_product(product_title: str, category: str) -> Dict[str
             step.set_reasoning(f"Filtered by category similarity using embedding distance with threshold {threshold}")
 
         # Step 4: Rank by Relevance (BUGGY: price boost helps wrong items!)
-        with StepContext("rank_by_relevance", StepType.RANK) as step:
+        with run.step("rank_by_relevance", StepType.RANK) as step:
             step.set_inputs({
                 "algorithm": "relevance_score",
                 "boost_price_match": True,
@@ -287,7 +291,11 @@ def select_competitor_for_product(product_title: str, category: str) -> Dict[str
             ranked = rank_by_relevance(filtered, product_title, boost_price_match=True)
 
             # Store top 100 ranked candidates
-            step.set_candidates(ranked[:100], previous_count=len(filtered))
+            step.set_candidates(
+                candidates_in=len(filtered),
+                candidates_out=len(ranked),
+                data=ranked[:100]
+            )
             step.set_outputs({
                 "top_score": ranked[0]["_relevance_score"] if ranked else 0,
                 "score_range": f"{ranked[-1]['_relevance_score']:.2f} - {ranked[0]['_relevance_score']:.2f}" if ranked else "N/A"
@@ -295,14 +303,18 @@ def select_competitor_for_product(product_title: str, category: str) -> Dict[str
             step.set_reasoning("Ranked by relevance score combining title similarity, category match, price proximity, and ratings")
 
         # Step 5: Select Best Competitor
-        with StepContext("select_best", StepType.SELECT) as step:
+        with run.step("select_best", StepType.SELECT) as step:
             step.set_inputs({
                 "count": 1
             })
 
             selected = select_top_competitor(ranked, count=1)
 
-            step.set_candidates(selected, previous_count=len(ranked))
+            step.set_candidates(
+                candidates_in=len(ranked),
+                candidates_out=len(selected),
+                data=selected
+            )
             step.set_outputs({
                 "selected_asin": selected[0]["asin"] if selected else None,
                 "selected_title": selected[0]["title"] if selected else None,

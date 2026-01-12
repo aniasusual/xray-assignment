@@ -64,26 +64,38 @@ configure(
 ### Step 2: Instrument Your Pipeline
 
 ```python
-from xray import RunContext, StepContext, StepType
+from xray import RunContext, StepType
 
 def find_best_product(query: str):
     # Wrap your pipeline in a RunContext
     with RunContext("product-search") as run:
 
-        # Wrap each step in a StepContext
-        with StepContext("search", StepType.SEARCH) as step:
+        # Wrap each step using run.step()
+        with run.step("search", StepType.SEARCH) as step:
             results = search_database(query)
-            step.set_candidates(results)
+            step.set_candidates(
+                candidates_in=0,
+                candidates_out=len(results),
+                data=results
+            )
             step.set_reasoning("Searched product database")
 
-        with StepContext("filter", StepType.FILTER) as step:
+        with run.step("filter", StepType.FILTER) as step:
             filtered = filter_by_price(results, min_price=10, max_price=100)
-            step.set_candidates(filtered, previous_count=len(results))
+            step.set_candidates(
+                candidates_in=len(results),
+                candidates_out=len(filtered),
+                data=filtered
+            )
             step.set_reasoning("Filtered by price range $10-$100")
 
-        with StepContext("rank", StepType.RANK) as step:
+        with run.step("rank", StepType.RANK) as step:
             ranked = rank_by_relevance(filtered, query)
-            step.set_candidates(ranked, previous_count=len(filtered))
+            step.set_candidates(
+                candidates_in=len(filtered),
+                candidates_out=len(ranked),
+                data=ranked
+            )
             step.set_reasoning("Ranked by relevance score")
 
         best = ranked[0]

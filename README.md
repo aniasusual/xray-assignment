@@ -121,7 +121,7 @@ curl http://127.0.0.1:8001/health
 ```bash
 cd ../xray-sdk
 source .venv/bin/activate
-python -c "from xray import RunContext, StepContext, configure; print('SDK imported successfully!')"
+python -c "from xray import RunContext, configure; print('SDK imported successfully!')"
 ```
 
 ### Troubleshooting
@@ -166,6 +166,23 @@ python3 debug_competitor_selection.py
 ```
 
 This investigates the bug using X-Ray's API and finds the root cause in ~2 minutes.
+
+### 4. Test the API (Optional)
+
+```bash
+# List all runs
+curl http://127.0.0.1:8001/api/runs
+
+# Get specific run details
+curl http://127.0.0.1:8001/api/runs/{run_id}
+
+# Query for problematic FILTER steps
+curl -X POST http://127.0.0.1:8001/api/steps/query \
+  -H "Content-Type: application/json" \
+  -d '{"step_type": "FILTER", "max_reduction_rate": 0.2}'
+```
+
+See [API_TESTING.md](API_TESTING.md) for complete testing guide with all endpoints.
 
 ## 📊 What You'll See
 
@@ -262,7 +279,7 @@ curl http://127.0.0.1:8001/api/runs/{run_id}
 filters_applied = {"category_similarity_threshold": 0.7}
 
 # Add LLM validation step
-with StepContext("llm_validate_category", StepType.LLM) as step:
+with run.step("llm_validate_category", StepType.LLM) as step:
     validated = llm_check_category_match(ranked)
 ```
 
@@ -275,9 +292,13 @@ with StepContext("llm_validate_category", StepType.LLM) as step:
 **Zero-Friction Instrumentation**:
 ```python
 with RunContext("competitor-selection") as run:
-    with StepContext("filter_products", StepType.FILTER) as step:
+    with run.step("filter_products", StepType.FILTER) as step:
         filtered = filter_by_price(candidates)
-        step.set_candidates(filtered, previous_count=len(candidates))
+        step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
         step.set_reasoning("Filtered by price range $10-$50")
 ```
 
@@ -340,6 +361,7 @@ Works across competitor-selection, listing-optimization, categorization, fraud-d
 ### Guides
 
 - **[QUICKSTART.md](QUICKSTART.md)** - Setup and usage guide
+- **[API_TESTING.md](API_TESTING.md)** - Complete API testing guide with curl commands ⭐
 - **[examples/README.md](examples/README.md)** - Demo walkthrough
 - **[IDE_SETUP.md](IDE_SETUP.md)** - VS Code configuration
 - **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - Project overview
@@ -422,10 +444,14 @@ with RunContext("pipeline") as run:
 
 **Full** (~5 lines per step):
 ```python
-with StepContext("filter", StepType.FILTER) as step:
+with run.step("filter", StepType.FILTER) as step:
     step.set_inputs({"threshold": 0.7})
     filtered = filter_by_category(candidates)
-    step.set_candidates(filtered, previous_count=len(candidates))
+    step.set_candidates(
+                candidates_in=len(candidates),
+                candidates_out=len(filtered),
+                data=filtered
+            )
     step.set_reasoning("Filtered by category")
 ```
 
