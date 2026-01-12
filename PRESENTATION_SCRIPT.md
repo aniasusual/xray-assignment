@@ -48,9 +48,11 @@ Let me walk you through the architecture, show it working, and share a challenge
 
 **Decision 1: Two tables, not embedded documents**
 
-Why? Because I need queries like 'show all FILTER steps with >90% reduction' across different pipelines. With PostgreSQL + indexes, this is O(log n). With MongoDB embedded, I'd scan every document.
+Why? Because I need queries like 'show all FILTER steps with >90% reduction' across different pipelines.
 
-Alternative I considered: Embedded steps in MongoDB. Rejected because cross-pipeline analytics become impossible.
+Alternative I considered: MongoDB with embedded steps. While MongoDB does have indexing on array fields, querying nested arrays across documents is more complex. You'd need to use aggregation pipelines with $unwind, which is less efficient than a simple JOIN in PostgreSQL.
+
+With separate tables, I get clean relational queries and can use PostgreSQL's JSONB operators for flexibility within each record.
 
 **Decision 2: JSONB for variable data**
 
